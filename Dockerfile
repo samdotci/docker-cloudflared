@@ -18,16 +18,21 @@ RUN make cloudflared
 # use a distroless base image with glibc
 FROM alpine:latest
 
+# create the user
+RUN \
+ addgroup -S cfd && \
+ adduser -S -G cfd cfd
+
 # copy our compiled binary
 COPY --from=builder --chown=nonroot /go/src/github.com/cloudflare/cloudflared/cloudflared /usr/local/bin/
 
 # copy in the entrypoint script
-COPY --chown=nonroot ./entrypoint.sh /entrypoint.sh
+COPY --chown=cfd ./entrypoint.sh /entrypoint.sh
 # chmod +x the entrypoint script
 RUN chmod +x /entrypoint.sh
 
 # run as non-privileged user
-USER nonroot
+USER cfd
 
 # command / entrypoint of container
 ENTRYPOINT ["/entrypoint.sh"]
