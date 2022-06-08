@@ -16,7 +16,7 @@ COPY . .
 RUN make cloudflared
 
 # use a distroless base image with glibc
-FROM gcr.io/distroless/base-debian10:nonroot
+FROM alpine:latest
 
 # copy our compiled binary
 COPY --from=builder --chown=nonroot /go/src/github.com/cloudflare/cloudflared/cloudflared /usr/local/bin/
@@ -30,5 +30,5 @@ RUN chmod +x /entrypoint.sh
 USER nonroot
 
 # command / entrypoint of container
-CMD ["/entrypoint.sh"]
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["cloudflared", "--no-autoupdate"]
