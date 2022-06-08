@@ -24,7 +24,7 @@ RUN \
  adduser -S -G cfd cfd
 
 # copy our compiled binary
-COPY --from=builder --chown=nonroot /go/src/github.com/cloudflare/cloudflared/cloudflared /usr/local/bin/
+COPY --from=builder --chown=cfd /go/src/github.com/cloudflare/cloudflared/cloudflared /usr/local/bin/
 
 # copy in the entrypoint script
 COPY --chown=cfd ./entrypoint.sh /entrypoint.sh
