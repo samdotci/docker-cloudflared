@@ -11,12 +11,12 @@ fi
 
 if [[ -n "${CLOUDFLARE_CONFIG_YML}" ]]; then
     echo >&2 "CLOUDFLARE_CONFIG_YML value found: "
-    echo "$CLOUDFLARE_CONFIG_YML" >"/etc/cloudflare/config.yml"
+    echo "$CLOUDFLARE_CONFIG_YML" >"/etc/cloudflared/config.yml"
 fi
 
 if [[ -n "${CLOUDFLARE_CERT_PEM}" ]]; then
     echo >&2 "CLOUDFLARE_CERT_PEM value found: "
-    echo "$CLOUDFLARE_CERT_PEM" >"/etc/cloudflare/cert.pem"
+    echo "$CLOUDFLARE_CERT_PEM" >"/etc/cloudflared/cert.pem"
 fi
 
 if [[ -n "${CLOUDFLARE_TUNNEL_JSON}" ]]; then

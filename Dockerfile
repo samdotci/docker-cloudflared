@@ -29,7 +29,9 @@ COPY --from=builder --chown=cfd /go/src/github.com/cloudflare/cloudflared/cloudf
 # copy in the entrypoint script
 COPY --chown=cfd ./entrypoint.sh /entrypoint.sh
 # chmod +x the entrypoint script
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh && \
+  mkdir -p /etc/cloudflared && \
+  chown -R cfd:cfd /etc/cloudflared
 
 # run as non-privileged user
 USER cfd
