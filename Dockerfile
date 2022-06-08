@@ -21,9 +21,14 @@ FROM gcr.io/distroless/base-debian10:nonroot
 # copy our compiled binary
 COPY --from=builder --chown=nonroot /go/src/github.com/cloudflare/cloudflared/cloudflared /usr/local/bin/
 
+# copy in the entrypoint script
+COPY --chown=nonroot ./entrypoint.sh /entrypoint.sh
+# chmod +x the entrypoint script
+RUN chmod +x /entrypoint.sh
+
 # run as non-privileged user
 USER nonroot
 
 # command / entrypoint of container
-ENTRYPOINT ["cloudflared", "--no-autoupdate"]
-CMD ["version"]
+CMD ["/entrypoint.sh"]
+CMD ["cloudflared", "--no-autoupdate"]
