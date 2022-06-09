@@ -100,7 +100,7 @@ jobs:
           context: .
           builder: ${{ steps.buildx.outputs.name }}
           push: ${{ github.event_name != 'pull_request' }}
-          platforms: linux/amd64,linux/arm64,linux/ppc64le
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           tags: ${{ steps.prep.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
