@@ -15,6 +15,7 @@ import (
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/facebookgo/grace/gracenet"
 	"github.com/getsentry/raven-go"
+	"github.com/google/uuid"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -348,6 +349,14 @@ func StartServer(
 		log.Err(err).Msg("Couldn't start tunnel")
 		return err
 	}
+	var clientID uuid.UUID
+	if tunnelConfig.NamedTunnel != nil {
+		clientID, err = uuid.FromBytes(tunnelConfig.NamedTunnel.Client.ClientID)
+		if err != nil {
+			// set to nil for classic tunnels
+			clientID = uuid.Nil
+		}
+	}
 
 	orchestrator, err := orchestration.NewOrchestrator(ctx, orchestratorConfig, tunnelConfig.Tags, tunnelConfig.Log)
 	if err != nil {
@@ -363,7 +372,7 @@ func StartServer(
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		readinessServer := metrics.NewReadyServer(log)
+		readinessServer := metrics.NewReadyServer(log, clientID)
 		observer.RegisterSink(readinessServer)
 		errC <- metrics.ServeMetrics(metricsListener, ctx.Done(), readinessServer, quickTunnelURL, orchestrator, log)
 	}()
@@ -519,7 +528,7 @@ func tunnelFlags(shouldHide bool) []cli.Flag {
 			Usage:   "Cloudflare Edge ip address version to connect with. {4, 6, auto}",
 			EnvVars: []string{"TUNNEL_EDGE_IP_VERSION"},
 			Value:   "4",
-			Hidden:  true,
+			Hidden:  false,
 		}),
 		altsrc.NewStringFlag(&cli.StringFlag{
 			Name:    tlsconfig.CaCertFlag,
@@ -827,6 +836,13 @@ func configureProxyFlags(shouldHide bool) []cli.Flag {
 			Usage:   legacyTunnelFlag("Disables chunked transfer encoding; useful if you are running a WSGI server."),
 			EnvVars: []string{"TUNNEL_NO_CHUNKED_ENCODING"},
 			Hidden:  shouldHide,
+		}),
+		altsrc.NewBoolFlag(&cli.BoolFlag{
+			Name:    ingress.Http2OriginFlag,
+			Usage:   "Enables HTTP/2 origin servers.",
+			EnvVars: []string{"TUNNEL_ORIGIN_ENABLE_HTTP2"},
+			Hidden:  shouldHide,
+			Value:   false,
 		}),
 	}
 	return append(flags, sshFlags(shouldHide)...)

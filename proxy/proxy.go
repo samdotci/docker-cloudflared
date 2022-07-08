@@ -28,6 +28,7 @@ const (
 	LogFieldCFRay         = "cfRay"
 	LogFieldRule          = "ingressRule"
 	LogFieldOriginService = "originService"
+	LogFieldFlowID        = "flowID"
 )
 
 // Proxy represents a means to Proxy between cloudflared and the origin services.
@@ -41,7 +42,7 @@ type Proxy struct {
 // NewOriginProxy returns a new instance of the Proxy struct.
 func NewOriginProxy(
 	ingressRules ingress.Ingress,
-	warpRoutingEnabled bool,
+	warpRouting ingress.WarpRoutingConfig,
 	tags []tunnelpogs.Tag,
 	log *zerolog.Logger,
 ) *Proxy {
@@ -50,8 +51,8 @@ func NewOriginProxy(
 		tags:         tags,
 		log:          log,
 	}
-	if warpRoutingEnabled {
-		proxy.warpRouting = ingress.NewWarpRoutingService()
+	if warpRouting.Enabled {
+		proxy.warpRouting = ingress.NewWarpRoutingService(warpRouting)
 		log.Info().Msgf("Warp-routing is enabled")
 	}
 
@@ -96,7 +97,7 @@ func (p *Proxy) ProxyHTTP(
 			logFields,
 		); err != nil {
 			rule, srv := ruleField(p.ingressRules, ruleNum)
-			p.logRequestError(err, cfRay, rule, srv)
+			p.logRequestError(err, cfRay, "", rule, srv)
 			return err
 		}
 		return nil
@@ -107,9 +108,9 @@ func (p *Proxy) ProxyHTTP(
 		}
 
 		rws := connection.NewHTTPResponseReadWriterAcker(w, req)
-		if err := p.proxyStream(req.Context(), rws, dest, originProxy, logFields); err != nil {
+		if err := p.proxyStream(req.Context(), rws, dest, originProxy); err != nil {
 			rule, srv := ruleField(p.ingressRules, ruleNum)
-			p.logRequestError(err, cfRay, rule, srv)
+			p.logRequestError(err, cfRay, "", rule, srv)
 			return err
 		}
 		return nil
@@ -136,16 +137,14 @@ func (p *Proxy) ProxyTCP(
 	serveCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	logFields := logFields{
-		cfRay:   req.CFRay,
-		lbProbe: req.LBProbe,
-		rule:    ingress.ServiceWarpRouting,
-	}
+	p.log.Debug().Str(LogFieldFlowID, req.FlowID).Msg("tcp proxy stream started")
 
-	if err := p.proxyStream(serveCtx, rwa, req.Dest, p.warpRouting.Proxy, logFields); err != nil {
-		p.logRequestError(err, req.CFRay, "", ingress.ServiceWarpRouting)
+	if err := p.proxyStream(serveCtx, rwa, req.Dest, p.warpRouting.Proxy); err != nil {
+		p.logRequestError(err, req.CFRay, req.FlowID, "", ingress.ServiceWarpRouting)
 		return err
 	}
+
+	p.log.Debug().Str(LogFieldFlowID, req.FlowID).Msg("tcp proxy stream finished successfully")
 
 	return nil
 }
@@ -197,6 +196,9 @@ func (p *Proxy) proxyHTTPRequest(
 	resp, err := httpService.RoundTrip(roundTripReq)
 	if err != nil {
 		tracing.EndWithErrorStatus(ttfbSpan, err)
+		if err := roundTripReq.Context().Err(); err != nil {
+			return errors.Wrap(err, "Incoming request ended abruptly")
+		}
 		return errors.Wrap(err, "Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared")
 	}
 
@@ -250,9 +252,8 @@ func (p *Proxy) proxyStream(
 	rwa connection.ReadWriteAcker,
 	dest string,
 	connectionProxy ingress.StreamBasedOriginProxy,
-	fields logFields,
 ) error {
-	originConn, err := connectionProxy.EstablishConnection(dest)
+	originConn, err := connectionProxy.EstablishConnection(ctx, dest)
 	if err != nil {
 		return err
 	}
@@ -317,6 +318,7 @@ type logFields struct {
 	cfRay   string
 	lbProbe bool
 	rule    interface{}
+	flowID  string
 }
 
 func (p *Proxy) logRequest(r *http.Request, fields logFields) {
@@ -360,11 +362,14 @@ func (p *Proxy) logOriginResponse(resp *http.Response, fields logFields) {
 	}
 }
 
-func (p *Proxy) logRequestError(err error, cfRay string, rule, service string) {
+func (p *Proxy) logRequestError(err error, cfRay string, flowID string, rule, service string) {
 	requestErrors.Inc()
 	log := p.log.Error().Err(err)
 	if cfRay != "" {
 		log = log.Str(LogFieldCFRay, cfRay)
+	}
+	if flowID != "" {
+		log = log.Str(LogFieldFlowID, flowID)
 	}
 	if rule != "" {
 		log = log.Str(LogFieldRule, rule)
